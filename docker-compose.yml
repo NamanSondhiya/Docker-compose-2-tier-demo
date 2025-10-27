@@ -1,0 +1,22 @@
+services:
+  backend:
+    build: ./backend
+    container_name: backend
+    ports:
+     - "7000:8000"
+    networks:
+    - arpi-net
+
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    depends_on:
+      - backend
+    ports:
+     - "7001:8001"
+    networks:
+      - arpi-net
+
+networks:
+  arpi-net:
+    driver: bridge
