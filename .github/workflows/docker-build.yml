@@ -1,0 +1,71 @@
+name: Docker Build & Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: Build Backend
+      uses: docker/build-push-action@v4
+      with:
+        context: ./backend
+        push: false
+        load: true
+        tags: backend:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Build Frontend
+      uses: docker/build-push-action@v4
+      with:
+        context: ./frontend
+        push: false
+        load: true
+        tags: frontend:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Start Services
+      run: |
+        docker network create arpi-net
+        docker run -d --name backend --network arpi-net -p 7000:8000 backend:test
+        docker run -d --name frontend --network arpi-net -p 7001:8001 -e BACKEND_URL=http://backend:8000 frontend:test
+        sleep 5
+    
+    - name: Test Backend API
+      run: |
+        curl -s http://localhost:7000/api | grep -q "games"
+        if [ $? -eq 0 ]; then
+          echo "Backend API test passed"
+        else
+          echo "Backend API test failed"
+          exit 1
+        fi
+    
+    - name: Test Frontend
+      run: |
+        curl -s http://localhost:7001 | grep -q "Hello"
+        if [ $? -eq 0 ]; then
+          echo "Frontend test passed"
+        else
+          echo "Frontend test failed"
+          exit 1
+        fi
+    
+    - name: Clean up
+      if: always()
+      run: |
+        docker stop backend frontend || true
+        docker rm backend frontend || true
+        docker network rm arpi-net || true
